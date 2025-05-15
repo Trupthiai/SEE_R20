@@ -47,3 +47,36 @@ uploaded_file = st.file_uploader("📤 Upload Excel File (must include column: '
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
+
+    if 'Total Marks' not in df.columns:
+        st.error("Excel must contain a column named 'Total Marks'")
+    else:
+        st.success("File uploaded successfully!")
+
+        all_rows = []
+        for _, row in df.iterrows():
+            total = int(row['Total Marks'])
+            if not (1 <= total <= 60):
+                part_a = [""] * 10
+                part_b = [""] * 5
+            else:
+                part_a, part_b = generate_flexible_distribution(total)
+
+            result_row = [total] + part_a + part_b
+            all_rows.append(result_row)
+
+        output_df = pd.DataFrame(all_rows, columns=['Total Marks'] + part_a_headers + part_b_headers)
+
+        st.dataframe(output_df)
+
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            output_df.to_excel(writer, index=False, sheet_name='SEE_Distribution')
+        processed_data = output.getvalue()
+
+        st.download_button(
+            label="📥 Download CO-wise Distribution Excel",
+            data=processed_data,
+            file_name="SEE_Mark_Distributions_CO.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
