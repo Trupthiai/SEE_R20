@@ -21,20 +21,6 @@ part_a_headers = ['Q1 CO1 2M', 'Q2 CO1 2M', 'Q3 CO2 2M', 'Q4 CO2 2M',
 
 part_b_headers = ['Q1 CO1 8M', 'Q2 CO2 8M', 'Q3 CO3 8M', 'Q4 CO4 8M', 'Q5 CO5 8M']
 
-def generate_flexible_distribution(total):
-    # Randomly allocate marks to Part A (max 20), rest to Part B
-    for _ in range(1000):
-        part_a_total = random.randint(0, min(20, total))
-        part_b_total = total - part_a_total
-
-        # Try generating valid splits for A and B
-        part_a = try_generate_marks(part_a_total, 10, max_mark=2)
-        part_b = try_generate_marks(part_b_total, 5, max_mark=8)
-
-        if part_a is not None and part_b is not None:
-            return part_a, part_b
-    return ["" for _ in range(10)], ["" for _ in range(5)]
-
 def try_generate_marks(target_sum, count, max_mark):
     if target_sum == 0:
         return [""] * count
@@ -44,35 +30,20 @@ def try_generate_marks(target_sum, count, max_mark):
             return values
     return None
 
+def generate_flexible_distribution(total):
+    for _ in range(1000):
+        part_a_total = random.randint(0, min(20, total))
+        part_b_total = total - part_a_total
+
+        part_a = try_generate_marks(part_a_total, 10, 2)
+        part_b = try_generate_marks(part_b_total, 5, 8)
+
+        if part_a is not None and part_b is not None:
+            return part_a, part_b
+    # fallback to blanks if distribution not possible
+    return [""] * 10, [""] * 5
+
 uploaded_file = st.file_uploader("📤 Upload Excel File (must include column: 'Total Marks')", type=["xlsx"])
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
-
-    if 'Total Marks' not in df.columns:
-        st.error("Excel must contain a column named 'Total Marks'")
-    else:
-        st.success("File uploaded successfully!")
-
-        all_rows = []
-        for idx, row in df.iterrows():
-            total = int(row['Total Marks'])
-            if not (1 <= total <= 60):
-                part_a = [""] * 10
-                part_b = [""] * 5
-            else:
-                part_a, part_b = generate_flexible_distribution(total)
-                if part_a is None or part_b is None:
-                    part_a = [""] * 10
-                    part_b = [""] * 5
-
-            result_row = [total] + part_a + part_b
-            all_rows.append(result_row)
-
-        output_df = pd.DataFrame(all_rows, columns=['Total Marks'] + part_a_headers + part_b_headers)
-
-        st.dataframe(output_df)
-
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            output_df.to_excel(writer, index=False, sheet_name='SEE_Distribution')
