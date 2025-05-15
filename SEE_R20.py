@@ -3,77 +3,76 @@ import pandas as pd
 import random
 import io
 
-st.title("SEE R20 - Marks Distribution Generator (CO-wise Format)")
+st.title("SEE R20 - CO-wise Mark Distribution Generator")
 
 st.markdown("""
-**Features:**
-- Part A: 10 Questions × 2 Marks = 20 Marks (CO1–CO5 × 2)
-- Part B: 5 Questions × 8 Marks = 40 Marks (CO1–CO5)
-- Accepts input Excel file with column `Total Marks` (1–60)
-- Returns formatted Excel with CO-mapped questions and mark distribution
+This tool generates CO-wise mark distributions for SEE exams based on input total marks.
+
+- **Part A**: 10 Questions × 1–2 marks each (Max: 20)
+- **Part B**: 5 Questions × 1–8 marks each (Max: 40)
+- Total Marks can be between **1 and 60**
+- Outputs a formatted Excel sheet with Q-CO mapping as column headers
 """)
 
-# Labels
-part_a_cols = ['Q1 CO1 2M', 'Q2 CO1 2M', 'Q3 CO2 2M', 'Q4 CO2 2M',
-               'Q5 CO3 2M', 'Q6 CO3 2M', 'Q7 CO4 2M', 'Q8 CO4 2M',
-               'Q9 CO5 2M', 'Q10 CO5 2M']
-part_b_cols = ['Q1 CO1 8M', 'Q2 CO2 8M', 'Q3 CO3 8M', 'Q4 CO4 8M', 'Q5 CO5 8M']
+# Question headers
+part_a_headers = ['Q1 CO1 2M', 'Q2 CO1 2M', 'Q3 CO2 2M', 'Q4 CO2 2M',
+                  'Q5 CO3 2M', 'Q6 CO3 2M', 'Q7 CO4 2M', 'Q8 CO4 2M',
+                  'Q9 CO5 2M', 'Q10 CO5 2M']
 
-def generate_part_a(total_a):
-    # Generate distribution of 10 values between 1–2 that sum to total_a
-    attempts = 0
-    while attempts < 1000:
-        values = [random.choice([1, 2]) for _ in range(10)]
-        if sum(values) == total_a:
+part_b_headers = ['Q1 CO1 8M', 'Q2 CO2 8M', 'Q3 CO3 8M', 'Q4 CO4 8M', 'Q5 CO5 8M']
+
+def generate_flexible_distribution(total):
+    # Randomly allocate marks to Part A (max 20), rest to Part B
+    for _ in range(1000):
+        part_a_total = random.randint(0, min(20, total))
+        part_b_total = total - part_a_total
+
+        # Try generating valid splits for A and B
+        part_a = try_generate_marks(part_a_total, 10, max_mark=2)
+        part_b = try_generate_marks(part_b_total, 5, max_mark=8)
+
+        if part_a is not None and part_b is not None:
+            return part_a, part_b
+    return ["" for _ in range(10)], ["" for _ in range(5)]
+
+def try_generate_marks(target_sum, count, max_mark):
+    if target_sum == 0:
+        return [""] * count
+    for _ in range(500):
+        values = [random.randint(1, max_mark) for _ in range(count)]
+        if sum(values) == target_sum:
             return values
-        attempts += 1
-    return ['-'] * 10
+    return None
 
-def generate_part_b(total_b):
-    attempts = 0
-    while attempts < 1000:
-        values = [random.randint(1, 8) for _ in range(5)]
-        if sum(values) == total_b:
-            return values
-        attempts += 1
-    return ['-'] * 5
-
-uploaded_file = st.file_uploader("📤 Upload Excel File (with column: Total Marks)", type=["xlsx"])
+uploaded_file = st.file_uploader("📤 Upload Excel File (must include column: 'Total Marks')", type=["xlsx"])
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
-    if 'Total Marks' not in df.columns:
-        st.error("❌ Excel file must have a column named 'Total Marks'")
-    else:
-        st.success("✅ File uploaded. Generating mark distributions...")
 
-        output_rows = []
+    if 'Total Marks' not in df.columns:
+        st.error("Excel must contain a column named 'Total Marks'")
+    else:
+        st.success("File uploaded successfully!")
+
+        all_rows = []
         for idx, row in df.iterrows():
             total = int(row['Total Marks'])
+            if not (1 <= total <= 60):
+                part_a = [""] * 10
+                part_b = [""] * 5
+            else:
+                part_a, part_b = generate_flexible_distribution(total)
+                if part_a is None or part_b is None:
+                    part_a = [""] * 10
+                    part_b = [""] * 5
 
-            part_a_total = min(total, 20)
-            part_b_total = max(0, total - 20)
+            result_row = [total] + part_a + part_b
+            all_rows.append(result_row)
 
-            part_a = generate_part_a(part_a_total) if part_a_total > 0 else ['-'] * 10
-            part_b = generate_part_b(part_b_total) if part_b_total > 0 else ['-'] * 5
-
-            full_row = part_a + part_b
-            output_rows.append(full_row)
-
-        output_df = pd.DataFrame(output_rows, columns=part_a_cols + part_b_cols)
-        output_df.insert(0, 'Total Marks', df['Total Marks'])
+        output_df = pd.DataFrame(all_rows, columns=['Total Marks'] + part_a_headers + part_b_headers)
 
         st.dataframe(output_df)
 
-        # Export Excel
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            output_df.to_excel(writer, index=False, sheet_name='SEE_Distribution_CO')
-        output.seek(0)
-
-        st.download_button(
-            label="📥 Download CO-wise Distribution Excel",
-            data=output,
-            file_name="SEE_Mark_Distributions_CO.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+            output_df.to_excel(writer, index=False, sheet_name='SEE_Distribution')
